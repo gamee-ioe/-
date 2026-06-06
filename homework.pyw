@@ -457,7 +457,7 @@ class HomeworkApp(ctk.CTk):
         self.manager = HomeworkManager()
         self.reminder_service = ReminderService(self.manager, self.show_reminder)
 
-        self.title("作业提醒系统 v0.3")
+        self.title("作业提醒系统 v1.0")
         self.geometry("950x650")
         self.minsize(850, 550)
 
@@ -585,7 +585,7 @@ class HomeworkApp(ctk.CTk):
         self.geometry(f"+{x}+{y}")
 
     def _show_help(self):
-        help_text = """作业提醒系统 v0.3 使用说明
+        help_text = """作业提醒系统 v1.0 使用说明
 
 【基本操作】
 • 单击选中一项作业
@@ -615,7 +615,7 @@ class HomeworkApp(ctk.CTk):
         messagebox.showinfo("使用说明", help_text)
 
     def _show_about(self):
-        about_text = """作业提醒系统 v0.3
+        about_text = """作业提醒系统 v1.0
 
 一个简洁高效的作业管理工具
 

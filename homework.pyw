@@ -3,12 +3,16 @@ import os
 from datetime import datetime, date
 import threading
 import time
-import tkinter as tk
-from tkinter import ttk, messagebox
+import customtkinter as ctk
+from tkinter import messagebox, Menu
+from CTkMenuBar import CTkMenuBar, CustomDropdownMenu
 from tkcalendar import Calendar
 import sys
 
 DATA_FILE = "homework_data.json"
+
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("blue")
 
 class Homework:
     def __init__(self, id, title, description, due_date, created_at=None, completed=False):
@@ -41,7 +45,7 @@ class Homework:
             due = datetime.strptime(self.due_date, "%Y-%m-%d").date()
             today = datetime.now().date()
             return (due - today).days
-        except:
+        except ValueError:
             return None
 
     def is_overdue(self):
@@ -65,7 +69,7 @@ class HomeworkManager:
                     data = json.load(f)
                     self.homeworks = [Homework.from_dict(item) for item in data.get("homeworks", [])]
                     self.next_id = data.get("next_id", 1)
-            except:
+            except (json.JSONDecodeError, Exception):
                 self.homeworks = []
                 self.next_id = 1
 
@@ -162,15 +166,16 @@ class ReminderService:
 
     def _run(self):
         while self.running:
-            reminders = self.manager.check_reminders()
-            if reminders and self.running:
-                self.callback(reminders)
+            if self.running:
+                reminders = self.manager.check_reminders()
+                if reminders and self.running:
+                    self.callback(reminders)
             for _ in range(self.check_interval):
                 if not self.running:
                     break
                 time.sleep(1)
 
-class CalendarDialog(tk.Toplevel):
+class CalendarDialog(ctk.CTkToplevel):
     def __init__(self, parent, initial_date=None, min_date=None, title="选择日期", allow_past=False):
         super().__init__(parent)
         self.title(title)
@@ -191,8 +196,8 @@ class CalendarDialog(tk.Toplevel):
         self.deiconify()
 
     def _create_widgets(self, initial_date):
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = ctk.CTkFrame(self, fg_color="#ffffff")
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         if self.allow_past:
             self.calendar = Calendar(main_frame, selectmode="day", date_pattern="yyyy-mm-dd",
@@ -205,14 +210,14 @@ class CalendarDialog(tk.Toplevel):
                                     year=initial_date.year, month=initial_date.month, day=initial_date.day,
                                     mindate=mindate, showweeknumbers=False, font=("Microsoft YaHei", 10), locale="zh_CN")
 
-        self.calendar.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        self.calendar.pack(fill="both", expand=True, pady=(0, 10))
 
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(fill=tk.X)
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.pack(fill="x")
 
-        ttk.Button(btn_frame, text="取消", command=self.cancel, width=12).pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="今天", command=self._select_today, width=12).pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="确定", command=self._confirm, width=12).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="取消", command=self.cancel, width=100, height=32, fg_color="#D0D0D0", text_color="#333333").pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="今天", command=self._select_today, width=100, height=32, fg_color="#4A90D9", text_color="white").pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="确定", command=self._confirm, width=100, height=32).pack(side="left", padx=10)
 
     def _center_window(self):
         self.update_idletasks()
@@ -238,11 +243,11 @@ class CalendarDialog(tk.Toplevel):
     def cancel(self):
         self.destroy()
 
-class AddHomeworkDialog(tk.Toplevel):
+class AddHomeworkDialog(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("添加作业")
-        self.geometry("450x400")
+        self.geometry("500x420")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -252,33 +257,39 @@ class AddHomeworkDialog(tk.Toplevel):
         self._center_window()
 
     def _create_widgets(self):
-        main_frame = ttk.Frame(self, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = ctk.CTkFrame(self, fg_color="#ffffff")
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        ttk.Label(main_frame, text="作业标题:", font=("", 11, "bold")).grid(row=0, column=0, sticky=tk.W, pady=8)
-        self.title_entry = ttk.Entry(main_frame, width=40, font=("", 11))
-        self.title_entry.grid(row=0, column=1, pady=8, padx=10)
+        title_label = ctk.CTkLabel(main_frame, text="作业标题:", font=("Microsoft YaHei", 14, "bold"), text_color="#2c3e50")
+        title_label.grid(row=0, column=0, sticky="w", pady=(0, 8))
+        
+        self.title_entry = ctk.CTkEntry(main_frame, width=350, font=("Microsoft YaHei", 12), placeholder_text="请输入作业标题")
+        self.title_entry.grid(row=0, column=1, pady=(0, 8), padx=(10, 0))
 
-        ttk.Label(main_frame, text="作业描述:", font=("", 11, "bold")).grid(row=1, column=0, sticky=tk.NW, pady=8)
-        self.desc_text = tk.Text(main_frame, width=40, height=6, font=("", 10))
-        self.desc_text.grid(row=1, column=1, pady=8, padx=10)
+        desc_label = ctk.CTkLabel(main_frame, text="作业描述:", font=("Microsoft YaHei", 14, "bold"), text_color="#2c3e50")
+        desc_label.grid(row=1, column=0, sticky="nw", pady=(0, 8))
+        
+        self.desc_text = ctk.CTkTextbox(main_frame, width=350, height=120, font=("Microsoft YaHei", 11), border_width=1, border_color="#cccccc")
+        self.desc_text.grid(row=1, column=1, pady=(0, 8), padx=(10, 0))
 
-        ttk.Label(main_frame, text="截止日期:", font=("", 11, "bold")).grid(row=2, column=0, sticky=tk.W, pady=8)
+        date_label = ctk.CTkLabel(main_frame, text="截止日期:", font=("Microsoft YaHei", 14, "bold"), text_color="#2c3e50")
+        date_label.grid(row=2, column=0, sticky="w", pady=(0, 8))
 
-        date_frame = ttk.Frame(main_frame)
-        date_frame.grid(row=2, column=1, pady=8, padx=10, sticky=tk.W)
+        date_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        date_frame.grid(row=2, column=1, pady=(0, 8), padx=(10, 0), sticky="w")
 
-        self.date_entry = ttk.Entry(date_frame, width=20, font=("", 11))
-        self.date_entry.pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(date_frame, text="📅 选择日期", command=self._pick_date, width=12).pack(side=tk.LEFT)
+        self.date_entry = ctk.CTkEntry(date_frame, width=180, font=("Microsoft YaHei", 12), placeholder_text="YYYY-MM-DD")
+        self.date_entry.pack(side="left", padx=(0, 10))
+        ctk.CTkButton(date_frame, text="📅 选择", command=self._pick_date, width=80, height=32).pack(side="left")
 
-        ttk.Label(main_frame, text="(不能选择过去的日期)", font=("", 9)).grid(row=3, column=1, sticky=tk.W, padx=10)
+        hint_label = ctk.CTkLabel(main_frame, text="(不能选择过去的日期)", font=("Microsoft YaHei", 10), text_color="#95A5A6")
+        hint_label.grid(row=3, column=1, sticky="w", padx=(10, 0))
 
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=(20, 0))
 
-        ttk.Button(btn_frame, text="取消", command=self.cancel, width=12).pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="确定添加", command=self.confirm, width=12).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="取消", command=self.cancel, width=120, height=36, fg_color="#D0D0D0", text_color="#333333").pack(side="left", padx=15)
+        ctk.CTkButton(btn_frame, text="确定添加", command=self.confirm, width=120, height=36, fg_color="#4A90D9", hover_color="#3A7BC8").pack(side="left", padx=15)
 
     def _center_window(self):
         self.update_idletasks()
@@ -290,7 +301,7 @@ class AddHomeworkDialog(tk.Toplevel):
         dialog = CalendarDialog(self, min_date=date.today(), title="选择截止日期")
         self.wait_window(dialog)
         if dialog.result:
-            self.date_entry.delete(0, tk.END)
+            self.date_entry.delete(0, "end")
             self.date_entry.insert(0, dialog.result)
 
     def confirm(self):
@@ -299,7 +310,7 @@ class AddHomeworkDialog(tk.Toplevel):
             messagebox.showwarning("提示", "请输入作业标题！", parent=self)
             return
 
-        description = self.desc_text.get("1.0", tk.END).strip()
+        description = self.desc_text.get("0.0", "end").strip()
         due_date = self.date_entry.get().strip()
 
         if not due_date:
@@ -318,11 +329,11 @@ class AddHomeworkDialog(tk.Toplevel):
     def cancel(self):
         self.destroy()
 
-class EditHomeworkDialog(tk.Toplevel):
+class EditHomeworkDialog(ctk.CTkToplevel):
     def __init__(self, parent, homework):
         super().__init__(parent)
         self.title("编辑作业")
-        self.geometry("450x400")
+        self.geometry("500x420")
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -333,36 +344,42 @@ class EditHomeworkDialog(tk.Toplevel):
         self._center_window()
 
     def _create_widgets(self):
-        main_frame = ttk.Frame(self, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = ctk.CTkFrame(self, fg_color="#ffffff")
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        ttk.Label(main_frame, text="作业标题:", font=("", 11, "bold")).grid(row=0, column=0, sticky=tk.W, pady=8)
-        self.title_entry = ttk.Entry(main_frame, width=40, font=("", 11))
+        title_label = ctk.CTkLabel(main_frame, text="作业标题:", font=("Microsoft YaHei", 14, "bold"), text_color="#2c3e50")
+        title_label.grid(row=0, column=0, sticky="w", pady=(0, 8))
+        
+        self.title_entry = ctk.CTkEntry(main_frame, width=350, font=("Microsoft YaHei", 12))
         self.title_entry.insert(0, self.homework.title)
-        self.title_entry.grid(row=0, column=1, pady=8, padx=10)
+        self.title_entry.grid(row=0, column=1, pady=(0, 8), padx=(10, 0))
 
-        ttk.Label(main_frame, text="作业描述:", font=("", 11, "bold")).grid(row=1, column=0, sticky=tk.NW, pady=8)
-        self.desc_text = tk.Text(main_frame, width=40, height=6, font=("", 10))
-        self.desc_text.insert("1.0", self.homework.description)
-        self.desc_text.grid(row=1, column=1, pady=8, padx=10)
+        desc_label = ctk.CTkLabel(main_frame, text="作业描述:", font=("Microsoft YaHei", 14, "bold"), text_color="#2c3e50")
+        desc_label.grid(row=1, column=0, sticky="nw", pady=(0, 8))
+        
+        self.desc_text = ctk.CTkTextbox(main_frame, width=350, height=120, font=("Microsoft YaHei", 11), border_width=1, border_color="#cccccc")
+        self.desc_text.insert("0.0", self.homework.description)
+        self.desc_text.grid(row=1, column=1, pady=(0, 8), padx=(10, 0))
 
-        ttk.Label(main_frame, text="截止日期:", font=("", 11, "bold")).grid(row=2, column=0, sticky=tk.W, pady=8)
+        date_label = ctk.CTkLabel(main_frame, text="截止日期:", font=("Microsoft YaHei", 14, "bold"), text_color="#2c3e50")
+        date_label.grid(row=2, column=0, sticky="w", pady=(0, 8))
 
-        date_frame = ttk.Frame(main_frame)
-        date_frame.grid(row=2, column=1, pady=8, padx=10, sticky=tk.W)
+        date_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        date_frame.grid(row=2, column=1, pady=(0, 8), padx=(10, 0), sticky="w")
 
-        self.date_entry = ttk.Entry(date_frame, width=20, font=("", 11))
+        self.date_entry = ctk.CTkEntry(date_frame, width=180, font=("Microsoft YaHei", 12))
         self.date_entry.insert(0, self.homework.due_date)
-        self.date_entry.pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(date_frame, text="📅 选择日期", command=self._pick_date, width=12).pack(side=tk.LEFT)
+        self.date_entry.pack(side="left", padx=(0, 10))
+        ctk.CTkButton(date_frame, text="📅 选择", command=self._pick_date, width=80, height=32).pack(side="left")
 
-        ttk.Label(main_frame, text="(日历可选择任意日期)", font=("", 9)).grid(row=3, column=1, sticky=tk.W, padx=10)
+        hint_label = ctk.CTkLabel(main_frame, text="(日历可选择任意日期)", font=("Microsoft YaHei", 10), text_color="#95A5A6")
+        hint_label.grid(row=3, column=1, sticky="w", padx=(10, 0))
 
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        btn_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=(20, 0))
 
-        ttk.Button(btn_frame, text="取消", command=self.cancel, width=12).pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="保存修改", command=self.confirm, width=12).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="取消", command=self.cancel, width=120, height=36, fg_color="#D0D0D0", text_color="#333333").pack(side="left", padx=15)
+        ctk.CTkButton(btn_frame, text="保存修改", command=self.confirm, width=120, height=36, fg_color="#4A90D9", hover_color="#3A7BC8").pack(side="left", padx=15)
 
     def _center_window(self):
         self.update_idletasks()
@@ -374,13 +391,13 @@ class EditHomeworkDialog(tk.Toplevel):
         initial = None
         try:
             initial = datetime.strptime(self.homework.due_date, "%Y-%m-%d").date()
-        except:
+        except ValueError:
             pass
 
         dialog = CalendarDialog(self, initial_date=initial, min_date=date.today(), title="选择截止日期", allow_past=True)
         self.wait_window(dialog)
         if dialog.result:
-            self.date_entry.delete(0, tk.END)
+            self.date_entry.delete(0, "end")
             self.date_entry.insert(0, dialog.result)
 
     def confirm(self):
@@ -389,7 +406,7 @@ class EditHomeworkDialog(tk.Toplevel):
             messagebox.showwarning("提示", "请输入作业标题！", parent=self)
             return
 
-        description = self.desc_text.get("1.0", tk.END).strip()
+        description = self.desc_text.get("0.0", "end").strip()
         due_date = self.date_entry.get().strip()
 
         if not due_date:
@@ -421,12 +438,11 @@ class ToolTip:
             return
         x = self.widget.winfo_rootx() + 20
         y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
-        self.tooltip = tk.Toplevel(self.widget)
+        self.tooltip = ctk.CTkToplevel(self.widget)
         self.tooltip.wm_overrideredirect(True)
         self.tooltip.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(self.tooltip, text=self.text, justify=tk.LEFT,
-                        background="#ffffe0", foreground="#000000",
-                        relief=tk.SOLID, borderwidth=1, font=("Microsoft YaHei", 9))
+        label = ctk.CTkLabel(self.tooltip, text=self.text, justify="left",
+                           text_color="#000000", fg_color="#ffffe0")
         label.pack()
 
     def hide(self, event=None):
@@ -434,19 +450,25 @@ class ToolTip:
             self.tooltip.destroy()
             self.tooltip = None
 
-class HomeworkApp(tk.Tk):
+class HomeworkApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
         self.manager = HomeworkManager()
         self.reminder_service = ReminderService(self.manager, self.show_reminder)
 
-        self.title("作业提醒系统 v0.2")
-        self.geometry("900x600")
-        self.minsize(800, 500)
+        self.title("作业提醒系统 v0.3")
+        self.geometry("950x650")
+        self.minsize(850, 550)
+
+        self.homework_items = {}
+        self.selected_ids = []
 
         self._create_widgets()
         self._center_window()
+        
+        self.fade_in()
+        
         self.refresh_list()
 
         self.attributes('-topmost', True)
@@ -454,34 +476,42 @@ class HomeworkApp(tk.Tk):
 
         self.reminder_service.start()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.bind("<Escape>", lambda e: self.tree.selection_remove(self.tree.selection()))
-        self.bind("<space>", lambda e: self.tree.selection_remove(self.tree.selection()))
+        self.bind("<Escape>", lambda e: self._clear_selection())
+        self.bind("<space>", lambda e: self._clear_selection())
 
     def _create_widgets(self):
-        title_frame = ttk.Frame(self)
-        title_frame.pack(fill=tk.X, pady=(15, 10))
+        title_frame = ctk.CTkFrame(self, fg_color="transparent")
+        title_frame.pack(fill="x", pady=(20, 15))
 
-        ttk.Label(title_frame, text="作业提醒系统", font=("Microsoft YaHei", 22, "bold")).pack(side=tk.LEFT, padx=20)
+        # 添加标题图标
+        icon_label = ctk.CTkLabel(title_frame, text="📋", font=("Arial", 30), text_color="#4A90D9")
+        icon_label.pack(side="left", padx=(25, 10))
 
-        self.status_label = ttk.Label(title_frame, text="", font=("Microsoft YaHei", 10), foreground="green")
-        self.status_label.pack(side=tk.RIGHT, padx=20)
+        ctk.CTkLabel(title_frame, text="作业提醒系统", font=("Microsoft YaHei", 28, "bold"), 
+                    text_color="#4A90D9").pack(side="left")
 
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        self.status_label = ctk.CTkLabel(title_frame, text="", font=("Microsoft YaHei", 11), text_color="#27AE60")
+        self.status_label.pack(side="right", padx=25)
 
-        toolbar = ttk.Frame(main_frame)
-        toolbar.pack(fill=tk.X, pady=(0, 10))
+        main_frame = ctk.CTkFrame(self, fg_color="#F5F7FA")
+        main_frame.pack(fill="both", expand=True, padx=15, pady=15)
 
-        ttk.Button(toolbar, text="➕ 添加作业", command=self.add_homework, width=15).pack(side=tk.LEFT, padx=5)
-        ttk.Button(toolbar, text="✏️ 编辑", command=self.edit_homework, width=15).pack(side=tk.LEFT, padx=5)
-        ttk.Button(toolbar, text="🗑️ 删除", command=self.delete_homework, width=15).pack(side=tk.LEFT, padx=5)
-        ttk.Button(toolbar, text="✓ 标记完成", command=self.toggle_complete, width=15).pack(side=tk.LEFT, padx=5)
-        ttk.Button(toolbar, text="🔔 检查提醒", command=self.check_reminders, width=15).pack(side=tk.LEFT, padx=5)
+        toolbar = ctk.CTkFrame(main_frame, fg_color="transparent")
+        toolbar.pack(fill="x", pady=(0, 12))
 
-        filter_frame = ttk.LabelFrame(main_frame, text="筛选条件", padding="10")
-        filter_frame.pack(fill=tk.X, pady=(0, 10))
+        ctk.CTkButton(toolbar, text="➕ 添加作业", command=self.add_homework, width=130, height=36, font=("Microsoft YaHei", 12), fg_color="#4A90D9", hover_color="#3A7BC8").pack(side="left", padx=8)
+        ctk.CTkButton(toolbar, text="✏️ 编辑", command=self.edit_homework, width=130, height=36, font=("Microsoft YaHei", 12), fg_color="#5B8DEF", hover_color="#4A7ED9").pack(side="left", padx=8)
+        ctk.CTkButton(toolbar, text="🗑️ 删除", command=self.delete_homework, width=130, height=36, fg_color="#E74C3C", hover_color="#C0392B", font=("Microsoft YaHei", 12)).pack(side="left", padx=8)
+        ctk.CTkButton(toolbar, text="✓ 标记完成", command=self.toggle_complete, width=130, height=36, fg_color="#27AE60", hover_color="#229954", font=("Microsoft YaHei", 12)).pack(side="left", padx=8)
+        ctk.CTkButton(toolbar, text="🔔 检查提醒", command=self.check_reminders, width=130, height=36, font=("Microsoft YaHei", 12), fg_color="#5B8DEF", hover_color="#4A7ED9").pack(side="left", padx=8)
+        
+        ctk.CTkButton(toolbar, text="?", command=self._show_help, width=40, height=36, 
+                     font=("Microsoft YaHei", 16, "bold"), fg_color="#4A90D9", hover_color="#3A7BC8").pack(side="right", padx=10)
 
-        self.filter_var = tk.StringVar(value="pending")
+        filter_frame = ctk.CTkFrame(main_frame, fg_color="#FFFFFF", border_color="#E1E8ED", border_width=1, corner_radius=12)
+        filter_frame.pack(fill="x", pady=(0, 15))
+
+        self.filter_var = ctk.StringVar(value="pending")
         filters = [
             ("全部", "all"),
             ("待完成", "pending"),
@@ -490,86 +520,79 @@ class HomeworkApp(tk.Tk):
             ("临期(3天内)", "due_soon")
         ]
 
+        filter_content = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        filter_content.pack(fill="x", padx=15, pady=10)
+
         for text, value in filters:
-            ttk.Radiobutton(filter_frame, text=text, variable=self.filter_var,
-                          value=value, command=self.refresh_list).pack(side=tk.LEFT, padx=10)
+            ctk.CTkRadioButton(filter_content, text=text, variable=self.filter_var,
+                              value=value, command=self.refresh_list,
+                              radiobutton_height=20, radiobutton_width=20).pack(side="left", padx=12)
 
-        sort_frame = ttk.Frame(filter_frame)
-        sort_frame.pack(side=tk.RIGHT, padx=10)
+        sort_frame = ctk.CTkFrame(filter_content, fg_color="transparent")
+        sort_frame.pack(side="right", padx=15)
 
-        self.sort_order_var = tk.BooleanVar(value=True)
-        self.sort_order_label = ttk.Label(sort_frame, text="🔽 截止日期", font=("", 9))
-        self.sort_order_label.pack(side=tk.LEFT, padx=5)
-        ttk.Checkbutton(sort_frame, text="倒序", variable=self.sort_order_var,
-                        command=self._toggle_sort_order).pack(side=tk.LEFT)
+        self.sort_order_var = ctk.BooleanVar(value=True)
+        ctk.CTkLabel(sort_frame, text="截止日期", font=("Microsoft YaHei", 10), text_color="#666666").pack(side="left", padx=8)
+        ctk.CTkCheckBox(sort_frame, text="倒序", variable=self.sort_order_var,
+                       command=self._toggle_sort_order, checkbox_height=20, checkbox_width=36).pack(side="left")
 
-        list_frame = ttk.LabelFrame(main_frame, text="作业列表", padding="5")
-        list_frame.pack(fill=tk.BOTH, expand=True)
+        list_frame = ctk.CTkFrame(main_frame, fg_color="#FFFFFF", border_color="#E1E8ED", border_width=1, corner_radius=12)
+        list_frame.pack(fill="both", expand=True)
 
         columns = ("title", "description", "due_date", "status", "days_left")
-        self.tree = ttk.Treeview(list_frame, columns=columns, show="tree headings", selectmode="extended")
+        self.tree = ctk.CTkScrollableFrame(list_frame, fg_color="#FFFFFF", scrollbar_fg_color="#F0F0F0", scrollbar_button_color="#D0D0D0")
+        self.tree.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
-        style = ttk.Style()
-        style.configure("Treeview", rowheight=30)
-
-        self.tree.column("#0", width=0, stretch=False)
-        self.tree.column("title", anchor="w", width=200)
-        self.tree.column("description", anchor="w", width=250)
-        self.tree.column("due_date", anchor="center", width=100)
-        self.tree.column("status", anchor="center", width=80)
-        self.tree.column("days_left", anchor="center", width=100)
-
-        self.tree.heading("title", text="标题")
-        self.tree.heading("description", text="描述")
-        self.tree.heading("due_date", text="截止日期")
-        self.tree.heading("status", text="状态")
-        self.tree.heading("days_left", text="剩余天数")
-
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        self.tree.tag_configure("overdue", foreground="red", font=("", 10, "bold"))
-        self.tree.tag_configure("due_soon", foreground="orange", font=("", 10, "bold"))
-        self.tree.tag_configure("completed", foreground="gray")
-        self.tree.tag_configure("normal", foreground="black")
+        self.columns = columns
+        self.header_labels = {}
+        
+        header_frame = ctk.CTkFrame(self.tree, fg_color="#4A90D9", corner_radius=5)
+        header_frame.pack(fill="x", pady=(0, 8))
+        header_frame.pack_propagate(False)
+        header_frame.configure(height=32)
+        
+        col_widths = {"title": 150, "description": 350, "due_date": 120, "status": 90, "days_left": 110}
+        col_anchors = {"title": "w", "description": "w", "due_date": "w", "status": "w", "days_left": "w"}
+        col_texts = {"title": "标题", "description": "描述", "due_date": "截止日期", "status": "状态", "days_left": "剩余天数"}
+        
+        current_x = 2
+        for col in columns:
+            width = col_widths.get(col, 100)
+            anchor = col_anchors.get(col, "w")
+            text = col_texts.get(col, col)
+            
+            label = ctk.CTkLabel(header_frame, text=text, font=("Microsoft YaHei", 11, "bold"),
+                                text_color="white", height=32, width=width, corner_radius=0, anchor=anchor)
+            label.place(x=current_x, y=0)
+            self.header_labels[col] = label
+            current_x += width + 2
 
         self.tree.bind("<Double-Button-1>", lambda e: self.edit_homework())
         self.tree.bind("<Return>", lambda e: self.edit_homework())
-        self.tree.bind("<Motion>", self._on_tree_motion)
-        self.tooltip_label = None
+        self.bind("<Return>", lambda e: self.edit_homework())
 
-        self.context_menu = tk.Menu(self, tearoff=0)
+        self.context_menu = Menu(self, tearoff=0, bg="#ffffff", borderwidth=1, relief="solid")
         self.context_menu.add_command(label="✏️ 编辑", command=self.edit_homework)
         self.context_menu.add_command(label="✓ 标记完成/未完成", command=self.toggle_complete)
         self.context_menu.add_command(label="🗑️ 删除", command=self.delete_homework)
         self.tree.bind("<Button-3>", self._show_context_menu)
         self.tree.bind("<Button-1>", self._on_tree_click)
 
-        info_frame = ttk.Frame(main_frame)
-        info_frame.pack(fill=tk.X, pady=(10, 0))
-
-        ttk.Button(info_frame, text="� 说明", command=self._show_help, width=10).pack(side=tk.LEFT, padx=10)
-
     def _center_window(self):
         self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - (self.winfo_width() // 2)
-        y = (self.winfo_screenheight() // 2) - (self.winfo_height() // 2)
+        x = 350  # 距离左边100像素
+        y = 100  # 距离顶部100像素
         self.geometry(f"+{x}+{y}")
 
     def _show_help(self):
-        help_text = """作业提醒系统 v0.2 使用说明
+        help_text = """作业提醒系统 v0.3 使用说明
 
 【基本操作】
 • 单击选中一项作业
 • Ctrl + 单击 多选/取消选中
 • Shift + 单击 范围选择
 • 双击或回车 编辑作业
-• 右键点击 显示操作菜单
 • 空格键或Escape 取消选择
-• 点击列表空白处 取消选择
 
 【筛选功能】
 • 全部：显示所有作业
@@ -588,17 +611,46 @@ class HomeworkApp(tk.Tk):
 【其他】
 • 添加作业时不能选择过去的日期
 • 编辑作业时可以修改为任意日期
-• 鼠标悬停在描述上可查看完整内容"""
+• 点击描述区域展开/收起完整内容"""
         messagebox.showinfo("使用说明", help_text)
 
+    def _show_about(self):
+        about_text = """作业提醒系统 v0.3
+
+一个简洁高效的作业管理工具
+
+功能特点：
+• 添加、编辑、删除作业
+• 多种筛选和排序方式
+• 到期提醒功能
+• 直观的用户界面
+
+技术栈：
+• Python + CustomTkinter
+• 现代扁平化设计
+
+© 2026 作业提醒系统"""
+        messagebox.showinfo("关于", about_text)
+
     def _toggle_sort_order(self):
-        reverse = self.sort_order_var.get()
-        self.sort_order_label.config(text="🔼 截止日期" if reverse else "🔽 截止日期")
         self.refresh_list()
 
+    def fade_in(self, alpha=0.0):
+        alpha += 0.1
+        if alpha <= 1.0:
+            self.attributes('-alpha', alpha)
+            self.after(30, lambda: self.fade_in(alpha))
+        else:
+            self.attributes('-alpha', 1.0)
+
     def refresh_list(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        self._do_refresh()
+
+    def _do_refresh(self):
+        for item_id in list(self.homework_items.keys()):
+            if item_id in self.homework_items:
+                self.homework_items[item_id].destroy()
+        self.homework_items.clear()
 
         homeworks = self.manager.list_homeworks(self.filter_var.get())
         homeworks.sort(key=lambda hw: hw.due_date, reverse=self.sort_order_var.get())
@@ -607,16 +659,16 @@ class HomeworkApp(tk.Tk):
             days = hw.days_until_due()
             if hw.completed:
                 status = "已完成"
-                tags = ("completed",)
+                text_color = "#95A5A6"
             elif hw.is_overdue():
                 status = "已逾期"
-                tags = ("overdue",)
+                text_color = "#E74C3C"
             elif hw.is_due_soon():
                 status = "临期"
-                tags = ("due_soon",)
+                text_color = "#F39C12"
             else:
                 status = "待完成"
-                tags = ("normal",)
+                text_color = "#333333"
 
             if days is not None:
                 if days < 0:
@@ -628,13 +680,175 @@ class HomeworkApp(tk.Tk):
             else:
                 days_text = "-"
 
-            description = hw.description[:30] + "..." if len(hw.description) > 30 else hw.description
-
-            self.tree.insert("", "end", iid=hw.id, values=(
-                hw.title, description, hw.due_date, status, days_text
-            ), tags=tags)
+            # 处理描述显示
+            display_description = hw.description[:50] + "..." if len(hw.description) > 50 else hw.description
+            
+            # 创建主项框架
+            item_frame = ctk.CTkFrame(self.tree, fg_color="#FFFFFF", border_color="#E8E8E8", border_width=1)
+            item_frame.pack(fill="x", pady=2)
+            
+            # 创建内容框架
+            content_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
+            content_frame.pack(fill="x", pady=2, padx=2)
+            content_frame.pack_propagate(False)
+            content_frame.configure(height=35)
+            
+            values = {
+                "title": hw.title,
+                "description": display_description,
+                "due_date": hw.due_date,
+                "status": status,
+                "days_left": days_text
+            }
+            
+            col_widths = {"title": 150, "description": 350, "due_date": 120, "status": 90, "days_left": 110}
+            
+            # 存储描述标签的引用
+            description_label = None
+            
+            # 初始化当前x坐标
+            current_x = 2
+            
+            # 遍历所有列
+            for col in self.columns:
+                width = col_widths.get(col, 100)
+                if col == "status":
+                    color = text_color
+                elif col == "days_left" and days is not None:
+                    if days < 0:
+                        color = "#E74C3C"
+                    elif days == 0:
+                        color = "#E74C3C"
+                    elif days <= 3:
+                        color = "#F39C12"
+                    else:
+                        color = "#333333"
+                else:
+                    color = "#333333"
+                
+                # 处理描述列
+                if col == "description" and len(hw.description) > 30:
+                    # 创建包含描述和按钮的框架
+                    desc_frame = ctk.CTkFrame(content_frame, fg_color="transparent", width=width, height=30)
+                    desc_frame.place(x=current_x, y=2)
+                    
+                    # 创建包含描述和按钮的水平框架
+                    desc_content_frame = ctk.CTkFrame(desc_frame, fg_color="transparent")
+                    desc_content_frame.pack(fill="x", expand=True, padx=5, pady=2)
+                    
+                    # 创建描述标签
+                    description_label = ctk.CTkLabel(desc_content_frame, text=display_description, 
+                                                  font=("Microsoft YaHei", 10),
+                                                  text_color=color, height=26, 
+                                                  anchor="w")
+                    description_label.pack(side="left", fill="x", expand=True, padx=(0, 2))
+                    
+                    # 创建展开/收起按钮
+                    toggle_button = ctk.CTkButton(desc_content_frame, text="▼", width=20, height=20, 
+                                                 fg_color="transparent", hover_color="#e0e0e0",
+                                                 text_color="#666666", font=("Arial", 8))
+                    # 设置按钮命令
+                    toggle_button.configure(command=lambda frame=item_frame, desc=hw.description, btn=toggle_button, desc_label=description_label: 
+                                           self._toggle_description(frame, desc, btn, desc_label))
+                    toggle_button.pack(side="left", padx=2)
+                    
+                    # 存储按钮引用
+                    item_frame.toggle_button = toggle_button
+                    item_frame.description_label = description_label
+                else:
+                    # 创建普通列标签
+                    label = ctk.CTkLabel(content_frame, text=values[col], font=("Microsoft YaHei", 10),
+                                        text_color=color, height=30, width=width, anchor="w")
+                    label.place(x=current_x, y=2)
+                    
+                    # 保存描述标签的引用（如果是描述列但不需要展开）
+                    if col == "description":
+                        description_label = label
+                
+                # 更新当前x坐标
+                current_x += width + 2
+            
+            # 绑定点击事件
+            item_frame.bind("<Button-1>", lambda e, hw_id=hw.id: self._on_item_click(e, hw_id))
+            item_frame.bind("<Double-Button-1>", lambda e, hw_id=hw.id: self._on_item_double_click(e, hw_id))
+            
+            # 绑定子元素的点击事件
+            # 首先绑定 content_frame 的直接子元素
+            for child in content_frame.winfo_children():
+                child.bind("<Button-1>", lambda e, hw_id=hw.id: self._on_item_click(e, hw_id))
+                child.bind("<Double-Button-1>", lambda e, hw_id=hw.id: self._on_item_double_click(e, hw_id))
+                
+                # 检查是否是描述框架，遍历其内部子元素
+                if isinstance(child, ctk.CTkFrame) and hasattr(child, 'winfo_children'):
+                    for desc_child in child.winfo_children():
+                        # 只有按钮不绑定选择事件
+                        if not isinstance(desc_child, ctk.CTkButton):
+                            desc_child.bind("<Button-1>", lambda e, hw_id=hw.id: self._on_item_click(e, hw_id))
+                        desc_child.bind("<Double-Button-1>", lambda e, hw_id=hw.id: self._on_item_double_click(e, hw_id))
+                        
+                        # 检查是否有更深层的子元素
+                        if isinstance(desc_child, ctk.CTkFrame) and hasattr(desc_child, 'winfo_children'):
+                            for deep_child in desc_child.winfo_children():
+                                # 只有按钮不绑定选择事件
+                                if not isinstance(deep_child, ctk.CTkButton):
+                                    deep_child.bind("<Button-1>", lambda e, hw_id=hw.id: self._on_item_click(e, hw_id))
+                                deep_child.bind("<Double-Button-1>", lambda e, hw_id=hw.id: self._on_item_double_click(e, hw_id))
+            
+            self.homework_items[hw.id] = item_frame
 
         self.update_status()
+        # 刷新后更新选中状态
+        self._update_selection()
+
+    def _on_item_click(self, event, hw_id):
+        # 检测Ctrl键
+        is_ctrl = event.state & 0x4 or event.state & 0x100
+        # 检测Shift键
+        is_shift = event.state & 0x1 or event.state & 0x200
+        
+        if is_ctrl:  # Ctrl+单击
+            if hw_id in self.selected_ids:
+                self.selected_ids.remove(hw_id)
+            else:
+                self.selected_ids.append(hw_id)
+        elif is_shift:  # Shift+单击
+            if self.selected_ids:
+                # 获取当前作业在列表中的位置
+                homeworks = self.manager.list_homeworks(self.filter_var.get())
+                homeworks.sort(key=lambda hw: hw.due_date, reverse=self.sort_order_var.get())
+                
+                current_index = -1
+                last_selected_index = -1
+                
+                for i, hw in enumerate(homeworks):
+                    if hw.id == hw_id:
+                        current_index = i
+                    if hw.id == self.selected_ids[-1]:
+                        last_selected_index = i
+                
+                if current_index != -1 and last_selected_index != -1:
+                    # 选择范围内的所有作业
+                    start = min(current_index, last_selected_index)
+                    end = max(current_index, last_selected_index)
+                    
+                    self.selected_ids = [homeworks[i].id for i in range(start, end + 1)]
+        else:  # 普通单击
+            self.selected_ids = [hw_id]
+        self._update_selection()
+        # 停止事件传播，防止触发tree的点击事件
+        return "break"
+
+    def _on_item_double_click(self, event, hw_id):
+        self.selected_ids = [hw_id]
+        self._update_selection()
+        self.edit_homework()
+
+    def _update_selection(self):
+        for hw_id, frame in self.homework_items.items():
+            if hw_id in self.selected_ids:
+                frame.configure(fg_color="#E8F4FD", border_color="#4A90D9")
+            else:
+                frame.configure(fg_color="#FFFFFF", border_color="#E8E8E8")
 
     def update_status(self):
         total = len(self.manager.homeworks)
@@ -648,14 +862,12 @@ class HomeworkApp(tk.Tk):
         if due_soon > 0:
             status_text += f" | 临期: {due_soon}"
 
-        self.status_label.config(text=status_text)
+        self.status_label.configure(text=status_text)
 
     def get_selected_ids(self):
-        selection = self.tree.selection()
-        if not selection:
-            messagebox.showwarning("提示", "请先选择作业！")
-            return []
-        return [int(item) for item in selection]
+        if not hasattr(self, 'selected_ids'):
+            self.selected_ids = []
+        return self.selected_ids
 
     def get_selected_id(self):
         ids = self.get_selected_ids()
@@ -671,53 +883,56 @@ class HomeworkApp(tk.Tk):
             messagebox.showinfo("成功", f"作业添加成功！\n标题: {hw.title}")
 
     def _show_context_menu(self, event):
-        item = self.tree.identify_row(event.y)
-        if item:
-            if item not in self.tree.selection():
-                self.tree.selection_set(item)
-            selection_count = len(self.tree.selection())
-            self.context_menu.entryconfigure(0, state="normal" if selection_count == 1 else "disabled")
-            self.context_menu.post(event.x_root, event.y_root)
+        # 检查点击位置是否在作业项上
+        clicked_hw_id = None
+        click_x = event.x_root
+        click_y = event.y_root
+        
+        for hw_id, frame in self.homework_items.items():
+            if frame.winfo_containing(click_x, click_y):
+                clicked_hw_id = hw_id
+                break
+        
+        if clicked_hw_id:
+            if clicked_hw_id not in self.get_selected_ids():
+                self.selected_ids = [clicked_hw_id]
+                self._update_selection()
+            self.context_menu.post(click_x, click_y)
 
     def _on_tree_click(self, event):
-        item = self.tree.identify_row(event.y)
-        if not item:
-            self.tree.selection_remove(self.tree.selection())
+        # Clear selection when clicking on empty area
+        # This will be overridden by item click handlers if click is on an item
+        self.selected_ids = []
+        self._update_selection()
 
-    def _on_tree_motion(self, event):
-        if hasattr(self, 'tooltip_label') and self.tooltip_label:
-            self.tooltip_label.destroy()
-            self.tooltip_label = None
+    def _clear_selection(self):
+        self.selected_ids = []
+        self._update_selection()
+    
+    def _toggle_description(self, frame, desc, btn, desc_label):
+        # 检查是否已有展开的描述
+        if hasattr(frame, 'expanded_frame') and frame.expanded_frame:
+            # 收起描述
+            frame.expanded_frame.destroy()
+            frame.expanded_frame = None
+            desc_label.configure(text=desc[:50] + "..." if len(desc) > 50 else desc)
+            btn.configure(text="▼")
+        else:
+            # 展开描述
+            # 清空原描述标签
+            desc_label.configure(text="")
+            # 创建展开的描述框架
+            expanded_frame = ctk.CTkFrame(frame, fg_color="#f5f5f5")
+            expanded_frame.pack(fill="x", padx=2, pady=2)
+            full_desc_label = ctk.CTkLabel(expanded_frame, text=desc, 
+                                        font=("Microsoft YaHei", 10),
+                                        text_color="#333333", 
+                                        wraplength=820, justify="left", anchor="w")
+            full_desc_label.pack(side="left", padx=5, pady=3, fill="x", expand=True)
+            frame.expanded_frame = expanded_frame
+            btn.configure(text="▲")
 
-        region = self.tree.identify_region(event.x, event.y)
-        if region != "cell":
-            return
 
-        item_id = self.tree.identify_row(event.y)
-        if not item_id:
-            return
-
-        column = self.tree.identify_column(event.x)
-        if column != "#2":
-            return
-
-        hw = self.manager.get_homework(int(item_id))
-        if not hw or not hw.description:
-            return
-
-        if len(hw.description) <= 30:
-            return
-
-        x = event.x_root + 15
-        y = event.y_root + 15
-        self.tooltip_label = tk.Toplevel(self)
-        self.tooltip_label.wm_overrideredirect(True)
-        self.tooltip_label.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(self.tooltip_label, text=hw.description, justify=tk.LEFT,
-                        background="#ffffe0", foreground="#000000",
-                        relief=tk.SOLID, borderwidth=1, font=("Microsoft YaHei", 9),
-                        wraplength=400)
-        label.pack()
 
     def edit_homework(self):
         hw_id = self.get_selected_id()

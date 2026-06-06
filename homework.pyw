@@ -441,7 +441,7 @@ class HomeworkApp(tk.Tk):
         self.manager = HomeworkManager()
         self.reminder_service = ReminderService(self.manager, self.show_reminder)
 
-        self.title("作业提醒系统 v0.1")
+        self.title("作业提醒系统 v0.2")
         self.geometry("900x600")
         self.minsize(800, 500)
 
@@ -454,6 +454,8 @@ class HomeworkApp(tk.Tk):
 
         self.reminder_service.start()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.bind("<Escape>", lambda e: self.tree.selection_remove(self.tree.selection()))
+        self.bind("<space>", lambda e: self.tree.selection_remove(self.tree.selection()))
 
     def _create_widgets(self):
         title_frame = ttk.Frame(self)
@@ -505,7 +507,10 @@ class HomeworkApp(tk.Tk):
         list_frame.pack(fill=tk.BOTH, expand=True)
 
         columns = ("title", "description", "due_date", "status", "days_left")
-        self.tree = ttk.Treeview(list_frame, columns=columns, show="tree headings", selectmode="browse")
+        self.tree = ttk.Treeview(list_frame, columns=columns, show="tree headings", selectmode="extended")
+
+        style = ttk.Style()
+        style.configure("Treeview", rowheight=30)
 
         self.tree.column("#0", width=0, stretch=False)
         self.tree.column("title", anchor="w", width=200)
@@ -536,16 +541,55 @@ class HomeworkApp(tk.Tk):
         self.tree.bind("<Motion>", self._on_tree_motion)
         self.tooltip_label = None
 
+        self.context_menu = tk.Menu(self, tearoff=0)
+        self.context_menu.add_command(label="✏️ 编辑", command=self.edit_homework)
+        self.context_menu.add_command(label="✓ 标记完成/未完成", command=self.toggle_complete)
+        self.context_menu.add_command(label="🗑️ 删除", command=self.delete_homework)
+        self.tree.bind("<Button-3>", self._show_context_menu)
+        self.tree.bind("<Button-1>", self._on_tree_click)
+
         info_frame = ttk.Frame(main_frame)
         info_frame.pack(fill=tk.X, pady=(10, 0))
 
-        ttk.Label(info_frame, text="💡 双击或按回车可编辑作业", font=("", 9)).pack(side=tk.LEFT, padx=10)
+        ttk.Button(info_frame, text="� 说明", command=self._show_help, width=10).pack(side=tk.LEFT, padx=10)
 
     def _center_window(self):
         self.update_idletasks()
         x = (self.winfo_screenwidth() // 2) - (self.winfo_width() // 2)
         y = (self.winfo_screenheight() // 2) - (self.winfo_height() // 2)
         self.geometry(f"+{x}+{y}")
+
+    def _show_help(self):
+        help_text = """作业提醒系统 v0.2 使用说明
+
+【基本操作】
+• 单击选中一项作业
+• Ctrl + 单击 多选/取消选中
+• Shift + 单击 范围选择
+• 双击或回车 编辑作业
+• 右键点击 显示操作菜单
+• 空格键或Escape 取消选择
+• 点击列表空白处 取消选择
+
+【筛选功能】
+• 全部：显示所有作业
+• 待完成：显示未完成的作业
+• 已完成：显示已完成的作业
+• 已逾期：显示已过截止日期的作业
+• 临期(3天内)：显示即将到期的作业
+
+【排序功能】
+• 按截止日期排序
+• 勾选"倒序"可切换升序/降序
+
+【批量操作】
+• 选择多个作业后，可批量删除或标记完成状态
+
+【其他】
+• 添加作业时不能选择过去的日期
+• 编辑作业时可以修改为任意日期
+• 鼠标悬停在描述上可查看完整内容"""
+        messagebox.showinfo("使用说明", help_text)
 
     def _toggle_sort_order(self):
         reverse = self.sort_order_var.get()
@@ -606,12 +650,16 @@ class HomeworkApp(tk.Tk):
 
         self.status_label.config(text=status_text)
 
-    def get_selected_id(self):
+    def get_selected_ids(self):
         selection = self.tree.selection()
         if not selection:
-            messagebox.showwarning("提示", "请先选择一项作业！")
-            return None
-        return int(selection[0])
+            messagebox.showwarning("提示", "请先选择作业！")
+            return []
+        return [int(item) for item in selection]
+
+    def get_selected_id(self):
+        ids = self.get_selected_ids()
+        return ids[0] if ids else None
 
     def add_homework(self):
         dialog = AddHomeworkDialog(self)
@@ -621,6 +669,20 @@ class HomeworkApp(tk.Tk):
             hw = self.manager.add_homework(title, description, due_date)
             self.refresh_list()
             messagebox.showinfo("成功", f"作业添加成功！\n标题: {hw.title}")
+
+    def _show_context_menu(self, event):
+        item = self.tree.identify_row(event.y)
+        if item:
+            if item not in self.tree.selection():
+                self.tree.selection_set(item)
+            selection_count = len(self.tree.selection())
+            self.context_menu.entryconfigure(0, state="normal" if selection_count == 1 else "disabled")
+            self.context_menu.post(event.x_root, event.y_root)
+
+    def _on_tree_click(self, event):
+        item = self.tree.identify_row(event.y)
+        if not item:
+            self.tree.selection_remove(self.tree.selection())
 
     def _on_tree_motion(self, event):
         if hasattr(self, 'tooltip_label') and self.tooltip_label:
@@ -673,29 +735,39 @@ class HomeworkApp(tk.Tk):
                 messagebox.showinfo("成功", "作业已更新！")
 
     def delete_homework(self):
-        hw_id = self.get_selected_id()
-        if hw_id is None:
+        hw_ids = self.get_selected_ids()
+        if not hw_ids:
             return
 
-        homework = self.manager.get_homework(hw_id)
-        if homework:
-            if messagebox.askyesno("确认删除", f"确定要删除作业「{homework.title}」吗？"):
-                self.manager.delete_homework(hw_id)
+        if len(hw_ids) == 1:
+            homework = self.manager.get_homework(hw_ids[0])
+            if homework:
+                if messagebox.askyesno("确认删除", f"确定要删除作业「{homework.title}」吗？"):
+                    self.manager.delete_homework(hw_ids[0])
+                    self.refresh_list()
+                    messagebox.showinfo("成功", "作业已删除！")
+        else:
+            if messagebox.askyesno("确认删除", f"确定要删除选中的 {len(hw_ids)} 项作业吗？"):
+                for hw_id in hw_ids:
+                    self.manager.delete_homework(hw_id)
                 self.refresh_list()
-                messagebox.showinfo("成功", "作业已删除！")
+                messagebox.showinfo("成功", f"已删除 {len(hw_ids)} 项作业！")
 
     def toggle_complete(self):
-        hw_id = self.get_selected_id()
-        if hw_id is None:
+        hw_ids = self.get_selected_ids()
+        if not hw_ids:
             return
 
-        homework = self.manager.get_homework(hw_id)
-        if homework:
-            new_status = not homework.completed
-            self.manager.mark_completed(hw_id, new_status)
-            self.refresh_list()
-            status_text = "已完成" if new_status else "待完成"
-            messagebox.showinfo("成功", f"作业已标记为{status_text}！")
+        completed_count = 0
+        for hw_id in hw_ids:
+            homework = self.manager.get_homework(hw_id)
+            if homework:
+                new_status = not homework.completed
+                self.manager.mark_completed(hw_id, new_status)
+                completed_count += 1
+
+        self.refresh_list()
+        messagebox.showinfo("成功", f"已更新 {completed_count} 项作业！")
 
     def check_reminders(self):
         reminders = self.manager.check_reminders()
